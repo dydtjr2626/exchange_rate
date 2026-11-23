@@ -1,6 +1,18 @@
 'use strict';
 
 const SOURCE_NAME = '한국은행 ECOS (매매기준율)';
+// 기록마다 남기는 출처 URL과 단위 (T04-C23). 실제 호출은 서버(/api/rates)가 하며, 인증키 자리는 공개하지 않으므로 {인증키}로 가린다.
+const ECOS_TABLE = '731Y001';
+const ECOS_ITEMS = { usd_krw: '0000001', jpy100_krw: '0000002' };
+const UNITS = { usd_krw: 'KRW per 1 USD (원/1달러)', jpy100_krw: 'KRW per 100 JPY (원/100엔)' };
+function provenance(sourceDate) {
+  const d = String(sourceDate || '').replace(/-/g, '');
+  const url = (item) => `https://ecos.bok.or.kr/api/StatisticSearch/{인증키}/json/kr/1/10/${ECOS_TABLE}/D/${d}/${d}/${item}`;
+  return {
+    source_url_usd: url(ECOS_ITEMS.usd_krw), source_url_jpy: url(ECOS_ITEMS.jpy100_krw),
+    unit_usd_krw: UNITS.usd_krw, unit_jpy100_krw: UNITS.jpy100_krw,
+  };
+}
 const STORAGE_KEY = 't04_state_v1';
 const TIMEOUT_MS = 10000;      // 실제 조회 제한 시간 (느린 네트워크 고려)
 const SYNTH_TIMEOUT_MS = 3000; // 합성 타임아웃 재생용
@@ -176,14 +188,15 @@ async function onRealFetch() {
     const { json, parsed } = await realFetch();
     const now = new Date();
     const date = kstDate(now);
+    const prov = provenance(parsed.source_date); // 출처 URL(인증키 가림)·단위 (C23)
     state.last_valid = {
       usd_krw: parsed.usd_krw, jpy100_krw: parsed.jpy100_krw,
-      source: SOURCE_NAME, source_date: parsed.source_date,
+      source: SOURCE_NAME, source_date: parsed.source_date, ...prov,
       fetched_at: now.toISOString(), kst_date: date, synthetic: false, raw: parsed.raw,
     };
     upsertDaily({
       kst_date: date, usd_krw: parsed.usd_krw, jpy100_krw: parsed.jpy100_krw, synthetic: false,
-      source_date: parsed.source_date, fetched_at: now.toISOString(), raw: parsed.raw,
+      source: SOURCE_NAME, source_date: parsed.source_date, ...prov, fetched_at: now.toISOString(), raw: parsed.raw,
     });
     Object.assign(state, { status: 'fresh', error_code: 'none', error_msg: '', error_guide: '', failure_synthetic: null, last_success_at: now.toISOString(), recovery_note: '' });
     save(); render();
@@ -1554,7 +1567,8 @@ function download(name, mime, text) {
 const exportRows = () => tableRecords().map((h) => ({
   kst_date: h.kst_date, usd_krw: h.usd_krw, jpy100_krw: h.jpy100_krw,
   type: h.synthetic ? 'synthetic' : h.manual ? 'manual' : h.backfilled ? 'backfill' : 'real', source_date: h.source_date || '', fetched_at: h.fetched_at || '',
-  source: h.manual ? h.source : '', note: h.note || '',
+  source: h.manual ? h.source : (h.source || ''), source_url_usd: h.source_url_usd || '', source_url_jpy: h.source_url_jpy || '',
+  unit_usd_krw: h.unit_usd_krw || UNITS.usd_krw, unit_jpy100_krw: h.unit_jpy100_krw || UNITS.jpy100_krw, note: h.note || '',
 }));
 $('export-json').addEventListener('click', () => {
   download(`exchange_rate_history_${exportTag()}.json`, 'application/json', JSON.stringify({
