@@ -1,5 +1,7 @@
 # 환율 정보판 (Task 04)
 
+**앱 주소: https://exchange-rate-pi.vercel.app** (심사용 화면: https://exchange-rate-pi.vercel.app/?dev=1)
+
 - 정적 파일: `public/` · 서버리스 함수: `api/chat.js` (Gemini 프록시), `api/rates.js` (한국은행 ECOS 프록시)
 - 환율 원천: **한국은행 ECOS Open API** — 통계표 `731Y001` (주요국 통화의 대원화환율, 일별 매매기준율)
   - 원/미국달러 `0000001` (1964-05-04~), 원/일본엔(100엔) `0000002` (1977-04-01~)
